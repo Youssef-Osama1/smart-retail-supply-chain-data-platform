@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+
+notebooks
+
+data/*
+
+!data/.gitkeep
+!data/**/.gitkeep
