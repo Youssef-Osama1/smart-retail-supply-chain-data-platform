@@ -25,11 +25,11 @@ def run_script(script_path):
 
 def run_bronze_pipeline():
 
-    run_script("src/01_Bronze/01_generate_data.py")
-    run_script("src/01_Bronze/02_inject_dirty_data.py")
-    run_script("src/01_Bronze/03_bronze_load.py")
+    run_script("src/Bronze/01_generate_data.py")
+    run_script("src/Bronze/02_inject_dirty_data.py")
+    run_script("src/Bronze/03_bronze_load.py")
 
-    print("Bronze Pipeline Finished Successfully")
+    print("Bronze Pipeline Completed Successfully")
 
 
 if __name__ == "__main__":
