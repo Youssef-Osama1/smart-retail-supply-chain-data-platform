@@ -1,12 +1,13 @@
 import pandas as pd
 from sqlalchemy import create_engine
 from pathlib import Path
+from dotenv import load_dotenv
+import os
 
 SILVER_PATH = Path("data/04_silver")
 
-engine = create_engine(
-    "postgresql+psycopg2://postgres:Mo380807%23%23@localhost:5432/retail_dw"
-)
+load_dotenv()
+engine = create_engine(os.getenv("DATABASE_URL"))
 
 tables = [
     "customers",

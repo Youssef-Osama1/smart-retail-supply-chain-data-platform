@@ -1,9 +1,10 @@
 from sqlalchemy import create_engine, text
 from pathlib import Path
+from dotenv import load_dotenv
+import os
 
-engine = create_engine(
-    "postgresql+psycopg2://postgres:Mo380807%23%23@localhost:5432/retail_dw"
-)
+load_dotenv()
+engine = create_engine(os.getenv("DATABASE_URL"))
 
 SQL_PATH = Path("src/Gold")
 
