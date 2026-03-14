@@ -8,7 +8,7 @@ SELECT DISTINCT
     EXTRACT(MONTH FROM d) AS month,
     EXTRACT(DAY FROM d) AS day
 FROM generate_series(
-    (SELECT MIN(order_date::date) FROM silver.orders),
-    (SELECT MAX(order_date::date) FROM silver.orders),
+    '2020-01-01'::date,
+    '2030-12-31'::date,
     interval '1 day'
 ) d;

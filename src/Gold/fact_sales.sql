@@ -6,9 +6,9 @@ SELECT
     o.order_id,
 	
     o.customer_id,
-	o.store_id,
+	o.store_id::bigint AS store_id,
 	
-	o.order_date,
+	TO_CHAR(o.order_date::date,'YYYYMMDD')::int AS date_key,
     
 	o.channel,
 	

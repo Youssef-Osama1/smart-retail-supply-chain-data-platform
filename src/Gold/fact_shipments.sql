@@ -9,10 +9,10 @@ SELECT
     s.customer_id,
     s.warehouse_id,
 
-	s.shipping_date::date AS shipping_date,
-	s.delivery_date::date AS delivery_date,
+	TO_CHAR(s.shipping_date::date,'YYYYMMDD')::int AS ship_date_key,
+    TO_CHAR(s.delivery_date::date,'YYYYMMDD')::int AS delivery_date_key,
 	
-    si.product_id,
+    si.product_id::bigint AS product_id,
     si.quantity,
     
     s.shipping_cost,
