@@ -1,0 +1,46 @@
+import pandas as pd
+from sqlalchemy import create_engine
+from pathlib import Path
+
+SILVER_PATH = Path("data/04_silver")
+
+engine = create_engine(
+    "postgresql+psycopg2://postgres:Mo380807%23%23@localhost:5432/retail_dw"
+)
+
+tables = [
+    "customers",
+    "orders",
+    "order_items",
+    "products",
+    "shipments",
+    "shipment_items",
+    "stores",
+    "store_inventory",
+    "warehouses",
+    "warehouse_inventory"
+]
+
+
+def load_table(table):
+    df = pd.read_csv(SILVER_PATH / f"{table}.csv")
+
+    df.to_sql(
+        table,
+        engine,
+        schema="silver",
+        if_exists="replace",
+        index=False
+    )
+
+    print(f"{table} loaded successfully")
+
+
+def main():
+
+    for table in tables:
+        load_table(table)
+
+
+if __name__ == "__main__":
+    main()
