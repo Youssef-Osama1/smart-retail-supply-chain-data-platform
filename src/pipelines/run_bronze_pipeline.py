@@ -11,15 +11,21 @@ env["PYTHONPATH"] = str(PROJECT_ROOT)
 
 
 def run_script(script_path):
-    print(f"Running {script_path}...")
+    # Convert relative path into absolute path
+    full_path = PROJECT_ROOT / script_path
+
+    # Print full path for debugging purpose
+    print(f"Running {full_path}...")
     
+    
+    # Execute the script using absolute path (convert Path → string)
     result = subprocess.run(
-        [sys.executable, script_path],
+        [sys.executable, full_path],
         env=env
     )
 
     if result.returncode != 0:
-        print(f"Error running {script_path}")
+        print(f"Error running {full_path}")
         sys.exit(1)
 
 
