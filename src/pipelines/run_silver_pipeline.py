@@ -1,3 +1,14 @@
+import sys
+from pathlib import Path
+
+# Add project root to PYTHONPATH
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(PROJECT_ROOT))
+
+SILVER = Path("data/04_silver")
+SILVER.mkdir(parents=True, exist_ok=True)
+
+
 from src.Silver.clean_products import clean_products
 from src.Silver.clean_customers import clean_customers
 from src.Silver.clean_stores import clean_stores
