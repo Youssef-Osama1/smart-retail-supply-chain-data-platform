@@ -6,7 +6,9 @@ import os
 load_dotenv()
 engine = create_engine(os.getenv("DATABASE_URL"))
 
-SQL_PATH = Path("src/Gold")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+SQL_PATH = PROJECT_ROOT / "src" / "Gold"
 
 files = [
     "create_schema.sql",
