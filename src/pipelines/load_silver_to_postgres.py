@@ -1,5 +1,5 @@
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from pathlib import Path
 from dotenv import load_dotenv
 import os
@@ -14,12 +14,14 @@ tables = [
     "orders",
     "order_items",
     "products",
+    "promotions",
     "shipments",
     "shipment_items",
     "stores",
     "store_inventory",
     "warehouses",
-    "warehouse_inventory"
+    "warehouse_inventory",
+    "returns",
 ]
 
 
@@ -38,6 +40,8 @@ def load_table(table):
 
 
 def main():
+    with engine.begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS silver"))
 
     for table in tables:
         load_table(table)

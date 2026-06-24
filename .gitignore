@@ -5,6 +5,8 @@ __pycache__/
 
 notebooks
 
+logs/
+
 data/*
 
 !data/.gitkeep

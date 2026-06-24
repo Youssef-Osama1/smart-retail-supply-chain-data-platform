@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS gold.dim_warehouses;
+DROP TABLE IF EXISTS gold.dim_warehouses CASCADE;
 
 CREATE TABLE gold.dim_warehouses AS
 SELECT

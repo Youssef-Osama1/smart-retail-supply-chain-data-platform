@@ -15,7 +15,10 @@ def clean_orders():
     df["channel"] = (df["channel"].astype(str).str.strip().str.lower().str.replace(r"\s+", "_", regex=True))
     df.loc[df["channel"] == "online", "store_id"] = np.nan
     df["store_id"] = df["store_id"].astype("Int64")
-    
+
+    if "order_status" in df.columns:
+        df["order_status"] = df["order_status"].astype(str).str.strip().str.lower()
+
     df["total_amount"] = (df["total_amount"].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False))
     df["total_amount"] = pd.to_numeric(df["total_amount"],errors="coerce")
     df["total_amount"] = df["total_amount"].abs()
