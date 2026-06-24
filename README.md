@@ -1,118 +1,113 @@
 # Smart Retail Supply Chain Data Platform
 
-An end-to-end, orchestrated **Medallion (Bronze → Silver → Gold)** data platform for a
-fictional fast-fashion retailer ("ZARA"-style). It simulates a realistic retail /
-supply-chain business, lands the data through cleaning and modeling layers, and serves a
-**PostgreSQL star schema** ready for Power BI dashboards and ML forecasting.
+An end-to-end **Data Engineering** project that builds a complete analytics platform for a
+fast-fashion retailer (ZARA-style). It simulates a realistic retail and supply-chain business,
+processes the data through a **Medallion architecture (Bronze → Silver → Gold)**, serves it as a
+**PostgreSQL star schema**, and powers a Power BI dashboard and a machine-learning demand model
+on top.
 
-The whole platform runs with one command via Docker + Apache Airflow.
+The whole pipeline is orchestrated by **Apache Airflow** and runs with a single command via
+**Docker Compose**.
 
----
+## What this project demonstrates
 
-## Architecture
+- Designing and orchestrating a multi-stage data pipeline with Airflow.
+- A layered Medallion data architecture with clear responsibilities per layer.
+- Dimensional modeling: a Gold star schema (8 dimensions, 4 fact tables) built in raw SQL.
+- Data-quality enforcement as a hard gate that fails the pipeline on bad data.
+- A fully reproducible, containerized environment (one command to stand everything up).
+- A downstream BI layer (Power BI) and a forecasting model (XGBoost) consuming the warehouse.
 
-```
-                    ┌─────────────────────────────────────────────────────────┐
-                    │                  Apache Airflow DAG                       │
-                    │             retail_supply_chain_pipeline                  │
-                    └─────────────────────────────────────────────────────────┘
-                                            │
-  ┌───────────────┐   ┌───────────────┐   ┌───────────────┐   ┌──────────────┐
-  │ Source sim.   │   │   BRONZE      │   │   SILVER      │   │    GOLD      │
-  │ generate +    │──▶│ raw, as-is    │──▶│ cleaned,      │──▶│ star schema  │
-  │ inject dirt   │   │ (CSV copy)    │   │ typed, tested │   │ (Postgres)   │
-  └───────────────┘   └───────────────┘   └───────────────┘   └──────────────┘
-   01_raw_clean/        03_bronze/          04_silver/          gold.* tables
-   02_raw/                                  + silver.* (PG)     dims + facts
-                                                  │
-                                            ┌─────▼─────┐
-                                            │ DQ gate   │  (PK / FK / ranges)
-                                            └───────────┘
-                                                  │
-                                            ┌─────▼─────┐
-                                            │ Power BI  │  margin, returns,
-                                            │ / ML      │  seasonality, stockouts
-                                            └───────────┘
-```
+## Tech stack
 
-Pipeline stages (Airflow tasks, in order):
+| Area | Tools |
+|------|-------|
+| Orchestration | Apache Airflow 2.10.4 |
+| Processing | Python, pandas |
+| Storage / Warehouse | PostgreSQL 16 |
+| Modeling | SQL (star schema) |
+| Infrastructure | Docker, Docker Compose |
+| Machine Learning | XGBoost, scikit-learn |
+| BI | Power BI |
 
-| Task | What it does |
-|------|--------------|
-| `generate` | Simulates the business → `data/01_raw_clean/*.csv` |
-| `inject_dirty` | Degrades the data (typos, casing, dupes, bad types) → `data/02_raw/` |
-| `bronze_load` | Lands raw data unchanged → `data/03_bronze/` |
-| `silver_clean` | Cleans/standardizes/validates → `data/04_silver/` |
-| `dq_checks` | PK uniqueness, FK integrity, ranges — **fails the run on violation** |
-| `load_silver_to_postgres` | Loads Silver CSVs into Postgres `silver` schema |
-| `gold_build` | Builds the `gold` star schema (dims, facts, constraints, indexes) |
+## Pipeline overview
 
----
+The Airflow DAG `retail_supply_chain_pipeline` runs the following stages in order. Each stage
+depends on the previous one, and the data-quality stage stops the run if any check fails.
+
+| Stage | What it does | Output |
+|-------|--------------|--------|
+| `generate` | Simulates the business (customers, products, orders, inventory, shipments, returns, promotions) | `data/01_raw_clean/` |
+| `inject_dirty` | Degrades the clean data with realistic issues (typos, mixed casing, duplicates, bad types) | `data/02_raw/` |
+| `bronze_load` | Lands the raw data unchanged | `data/03_bronze/` |
+| `silver_clean` | Cleans, standardizes, deduplicates, and type-casts each entity | `data/04_silver/` |
+| `dq_checks` | Validates PK uniqueness, FK integrity, value ranges, and business rules — **fails the run on violation** | — |
+| `load_silver_to_postgres` | Loads the Silver tables into the Postgres `silver` schema | `silver.*` |
+| `gold_build` | Builds the Gold star schema (dimensions, facts, constraints, indexes) | `gold.*` |
+
+## The Medallion layers
+
+**Bronze** — raw landing zone. Data is stored exactly as received, with no cleaning, so the
+original (intentionally dirty) state is always preserved and traceable.
+
+**Silver** — cleaned and conformed. One cleaner per entity handles trimming, casing,
+deduplication, value mapping (e.g. `m`/`male` → `Male`), known typo fixes, and type casting.
+The Silver tables are then loaded into Postgres.
+
+**Gold** — business-ready dimensional model. A star schema optimized for analytics and BI,
+built in SQL directly from the Silver schema.
 
 ## The simulated business
 
-The generator (`src/Bronze/01_generate_data.py`, parameters in `src/config.py`) is built to
-produce **analytically rich** data, not flat noise:
+The generator (`src/Bronze/01_generate_data.py`, parameters in `src/config.py`) is designed to
+produce analytically rich data rather than flat random noise:
 
-- **Temporal demand** — daily order volume = baseline × YoY growth × weekday × month ×
-  promotion multipliers. Produces real trend, weekend uplift, and Black Friday / Christmas /
-  seasonal-sale spikes.
-- **Customer heterogeneity** — heavy-tailed purchase frequency (a minority of customers drive
-  most orders → meaningful RFM/CLV), acquisition cohorts via `signup_date`.
-- **Realistic behavior** — weighted (not hard-coded) segment preferences with cross-shopping;
-  gender skew; real birth dates; geography-aware in-store shopping.
-- **Margin** — every product has a `cost` (COGS) → gross/net/margin analytics.
-- **Promotions & historical price** — a promotion calendar discounts items in scope;
-  `order_items.price_paid` records the **actual transaction price** (never overwritten with the
-  current list price).
-- **Inventory realism** — month-end snapshots derived from `opening stock − sales +
-  replenishment`, with real **stockouts** and a reorder/lead-time policy.
-- **Returns & refunds** — channel-dependent return rates (online ≫ in-store) with reasons.
-- **Shipments** — shipping method (standard/express), late/failed deliveries, occasional
-  cross-border fulfilment.
+- **Demand model** — daily order volume reacts to year-over-year growth, weekday, month, and
+  promotion multipliers, producing real trend, weekend uplift, and seasonal spikes
+  (Black Friday, Christmas, Winter/Summer sales).
+- **Customer behavior** — heavy-tailed purchase frequency (a minority of customers drive most
+  orders, enabling RFM/CLV analysis), acquisition cohorts, gender and age distributions, and
+  geography-aware in-store shopping.
+- **Margin** — every product carries a cost (COGS), enabling gross / net / margin analytics.
+- **Promotions and pricing** — a promotion calendar discounts items in scope; each line records
+  the actual price paid at transaction time, never overwritten with the current list price.
+- **Inventory** — month-end snapshots derived from opening stock − sales + replenishment, with
+  real stockouts and a reorder / lead-time policy across stores and warehouses.
+- **Returns** — channel-dependent return rates (online higher than in-store) with reasons.
+- **Shipments** — shipping methods, late and failed deliveries, and cross-border fulfilment.
 
-Reproducible: a fixed `SEED` + `REFERENCE_DATE` make every run identical.
+Runs are fully reproducible: a fixed seed and reference date make every run identical.
 
----
+Default scale: 25,000 customers, 100 products, 20 stores, up to 250,000 orders over 2023–2025.
 
-## Star schema (Gold)
+## Gold star schema
 
-```
-                 dim_date ────────────────┐
-                    │  ▲                   │
-                    │  │                   │
-  dim_customers ──┐ │  │ ┌── dim_products  │
-                  ▼ ▼  │ ▼                 ▼
-                ┌────────────┐        ┌──────────────┐
-   dim_channel─▶│ fact_sales │        │fact_inventory│◀─ dim_products
-                └────────────┘        └──────────────┘   (+ dim_date)
-  dim_stores ──▲                       location_id = store|warehouse
-                                       + snapshot_date_key, units_sold, stockout_flag
+**Dimensions:** `dim_date`, `dim_customers`, `dim_products`, `dim_stores`, `dim_warehouses`,
+`dim_channel`, `dim_promotions`, `dim_location`.
 
-  fact_returns ── dim_customers / dim_products / dim_date
-  fact_shipments / fact_shipment_summary ── dim_customers / dim_warehouses / dim_products / dim_date
-  dim_promotions (reference)
-```
-
-**Facts**
+**Facts:**
 
 | Fact | Grain | Key measures |
 |------|-------|--------------|
 | `fact_sales` | order line | quantity, gross / discount / net / cost / **margin** amounts |
-| `fact_returns` | returned line | quantity_returned, refund_amount, reason |
-| `fact_inventory` | snapshot × product × location | quantity_on_hand, units_sold, stockout_flag |
-| `fact_shipments` | shipment line | quantity (cost/SLA repeat — see note) |
-| `fact_shipment_summary` | shipment | shipping_cost, delivery_days (use this for cost/SLA) |
+| `fact_returns` | returned line | quantity returned, refund amount, reason |
+| `fact_inventory` | snapshot × product × location | quantity on hand, units sold, stockout flag |
+| `fact_shipments` | shipment line | quantity, shipping cost, delivery SLA |
 
-> **Power BI notes:** `dim_date` is a **role-playing** dimension for `fact_shipments`
-> (`ship_date_key` vs `delivery_date_key`) — use an inactive relationship + `USERELATIONSHIP`.
-> Aggregate shipping cost from `fact_shipment_summary`, not `fact_shipments`, to avoid
-> double-counting across shipment lines. `fact_inventory.location_id` is polymorphic
-> (store *or* warehouse), so it carries product + date FKs only.
+The data-quality gate enforces primary-key uniqueness, referential integrity across all facts
+and dimensions, non-negative numeric ranges, and business rules (for example, online orders
+must not carry a store id).
 
-A full column-level **data dictionary** is in [`docs/DATA_DICTIONARY.md`](docs/DATA_DICTIONARY.md).
+## Analytics layer
 
----
+**Power BI dashboard** — a 7-page report built on the Gold schema, covering sales and revenue,
+margin and profitability, returns, inventory and stockouts, shipping performance, and seasonal
+demand.
+
+**Demand forecasting (machine learning)** — `notebooks/ZARA_Quantity_Prediction.ipynb` trains an
+XGBoost model to forecast monthly quantity sold per product category. It pulls aggregated sales
+from the Gold layer and engineers lag features, rolling averages, and cyclical month encodings,
+with a time-based train/test split.
 
 ## Running it
 
@@ -120,13 +115,18 @@ A full column-level **data dictionary** is in [`docs/DATA_DICTIONARY.md`](docs/D
 
 ```bash
 docker compose up -d --build
-# Airflow UI: http://localhost:8080  (airflow / airflow)
-# Un-pause and trigger the DAG "retail_supply_chain_pipeline", or:
+```
+
+- Airflow UI: http://localhost:8080 (login `airflow` / `airflow`)
+- Un-pause and trigger the `retail_supply_chain_pipeline` DAG, or trigger it from the CLI:
+
+```bash
 docker compose run --rm airflow-cli airflow dags trigger retail_supply_chain_pipeline
 ```
 
-The warehouse is exposed at `postgresql://airflow:airflow@localhost:5432/retail`
-(schemas `silver` and `gold`) — point Power BI / a SQL client there.
+The warehouse is reachable from your machine at
+`postgresql://airflow:airflow@localhost:5433/retail` (schemas `silver` and `gold`). Point
+Power BI or any SQL client there.
 
 ### Option B — Local (no orchestrator)
 
@@ -134,41 +134,28 @@ The warehouse is exposed at `postgresql://airflow:airflow@localhost:5432/retail`
 pip install -r requirements.txt
 cp .env.example .env        # set DATABASE_URL to your Postgres
 
-python -m src.pipelines.run_bronze_pipeline      # generate → inject → bronze
-python -m src.pipelines.run_silver_pipeline      # clean → silver
+python -m src.pipelines.run_bronze_pipeline      # generate -> inject -> bronze
+python -m src.pipelines.run_silver_pipeline      # clean -> silver
 python -m src.quality.dq_checks                  # data-quality gate
-python -m src.pipelines.load_silver_to_postgres  # silver → Postgres
+python -m src.pipelines.load_silver_to_postgres  # silver -> Postgres
 python -m src.pipelines.run_gold_pipeline        # build gold star schema
 ```
-
----
 
 ## Project layout
 
 ```
 src/
-  config.py                  # all generator/business parameters
+  config.py                  # all generator and business parameters
   Bronze/
     01_generate_data.py      # business simulator
     02_inject_dirty_data.py  # realistic data degradation
     03_bronze_load.py        # raw landing
   Silver/                    # one cleaner per entity
-  Gold/                      # star-schema DDL (dims, facts, constraints)
-  quality/dq_checks.py       # PK/FK/range data-quality gate
+  Gold/                      # star-schema SQL (dimensions, facts, constraints)
+  quality/dq_checks.py       # PK / FK / range / rule data-quality gate
   pipelines/                 # stage runners (used by the DAG and locally)
 dags/                        # Airflow DAG
-docker/                      # Postgres init
+docker/                      # Postgres init scripts
+notebooks/                   # demand-forecasting model
 Dockerfile, docker-compose.yml
-```
-
----
-
-## Known simplifications
-
-- Products are modeled at **style** grain (no size/color SKU layer).
-- Bronze is a CSV pass-through (no separate object store / ingestion metadata).
-- Dimensions are rebuilt each run (**no SCD Type 2** history).
-- Transformations are pandas + raw SQL (no dbt).
-
-These were deliberate scope choices to keep the project focused and runnable.
 ```
