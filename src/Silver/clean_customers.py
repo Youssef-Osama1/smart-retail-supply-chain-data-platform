@@ -29,6 +29,9 @@ def clean_customers():
 
     df["date_of_birth"] = pd.to_datetime(df["date_of_birth"],errors="coerce")
 
+    if "signup_date" in df.columns:
+        df["signup_date"] = pd.to_datetime(df["signup_date"], errors="coerce")
+
 
     city_fix = {
         "Madrd": "Madrid",

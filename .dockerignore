@@ -1,0 +1,10 @@
+.git
+__pycache__/
+*.pyc
+data/01_raw_clean/*
+data/02_raw/*
+data/03_bronze/*
+data/04_silver/*
+logs/
+notebooks/
+.env

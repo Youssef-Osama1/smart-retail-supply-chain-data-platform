@@ -16,9 +16,13 @@ files = [
     "dim_stores.sql",
     "dim_warehouses.sql",
     "dim_date.sql",
+    "dim_channel.sql",
+    "dim_promotions.sql",
+    "dim_location.sql",
 
     "fact_sales.sql",
     "fact_shipments.sql",
+    "fact_returns.sql",
     "fact_inventory.sql",
 
     "constraints.sql"

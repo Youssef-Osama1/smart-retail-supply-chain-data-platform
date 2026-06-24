@@ -43,6 +43,14 @@ def clean_products():
     df["unit_price"] = pd.to_numeric(df["unit_price"], errors="coerce")
     df["unit_price"] = df["unit_price"].abs()
 
+    if "cost" in df.columns:
+        df["cost"] = pd.to_numeric(df["cost"], errors="coerce").abs()
+    if "launch_date" in df.columns:
+        df["launch_date"] = pd.to_datetime(df["launch_date"], errors="coerce")
+    for col in ("fabric", "style"):
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip().str.title()
+
     df = df.reset_index(drop=True)
 
     df.to_csv(SILVER / "products.csv", index=False)

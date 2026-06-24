@@ -11,9 +11,7 @@ CLEAN_PATH = Path("data/01_raw_clean")
 DIRTY_PATH = Path("data/02_raw")
 DIRTY_PATH.mkdir(parents=True, exist_ok=True)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - Customers
+# --- Customers --------------------------------------------------------------
 
 customers = pd.read_csv(CLEAN_PATH / "customers.csv")
 
@@ -66,9 +64,7 @@ customers = pd.concat([
 
 customers.to_csv(DIRTY_PATH / "customers.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - Products
+# --- Products ---------------------------------------------------------------
 
 products = pd.read_csv(CLEAN_PATH / "products.csv")
 
@@ -131,9 +127,7 @@ products = pd.concat([
 
 products.to_csv(DIRTY_PATH / "products.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - Stores
+# --- Stores -----------------------------------------------------------------
 
 stores = pd.read_csv(CLEAN_PATH / "stores.csv")
 
@@ -177,9 +171,7 @@ stores = pd.concat([stores, dup_rows], ignore_index=True)
 
 stores.to_csv(DIRTY_PATH / "stores.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - Warehouses
+# --- Warehouses -------------------------------------------------------------
 
 warehouses = pd.read_csv(CLEAN_PATH / "warehouses.csv")
 
@@ -215,9 +207,7 @@ warehouses.loc[mask, "country"] = warehouses.loc[mask, "country"].str.lower()
 
 warehouses.to_csv(DIRTY_PATH / "warehouses.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - Store Inventory
+# --- Store Inventory --------------------------------------------------------
 
 store_inventory = pd.read_csv(CLEAN_PATH / "store_inventory.csv")
 
@@ -241,9 +231,7 @@ store_inventory = pd.concat([
 ])
 store_inventory.to_csv(DIRTY_PATH / "store_inventory.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - Warehouse Inventory
+# --- Warehouse Inventory ----------------------------------------------------
 
 warehouse_inventory = pd.read_csv(CLEAN_PATH / "warehouse_inventory.csv")
 
@@ -267,9 +255,7 @@ warehouse_inventory = pd.concat([
 ])
 warehouse_inventory.to_csv(DIRTY_PATH / "warehouse_inventory.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - Orders
+# --- Orders -----------------------------------------------------------------
 
 orders = pd.read_csv(CLEAN_PATH / "orders.csv")
 
@@ -324,9 +310,7 @@ orders = pd.concat([
 
 orders.to_csv(DIRTY_PATH / "orders.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - Order Items
+# --- Order Items ------------------------------------------------------------
 
 order_items = pd.read_csv(CLEAN_PATH / "order_items.csv")
 
@@ -360,9 +344,7 @@ order_items.loc[mask, "order_id"] = 9999999
 
 order_items.to_csv(DIRTY_PATH / "order_items.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - shipments
+# --- Shipments --------------------------------------------------------------
 
 shipments = pd.read_csv(CLEAN_PATH / "shipments.csv")
 
@@ -410,9 +392,7 @@ shipments = pd.concat([
 
 shipments.to_csv(DIRTY_PATH / "shipments.csv", index=False)
 
-# --------------------------------------------------------------------------
-
-# Inject Dirty Data - shipment_items
+# --- Shipment Items ---------------------------------------------------------
 
 shipment_items = pd.read_csv(CLEAN_PATH / "shipment_items.csv")
 
@@ -442,3 +422,42 @@ shipment_items = pd.concat([
 ])
 
 shipment_items.to_csv(DIRTY_PATH / "shipment_items.csv", index=False)
+
+# --- Returns ----------------------------------------------------------------
+
+returns = pd.read_csv(CLEAN_PATH / "returns.csv")
+
+# refund_amount formatting issues
+returns["refund_amount"] = returns["refund_amount"].astype(str)
+mask = returns.sample(frac=0.03, random_state=140).index
+returns.loc[mask, "refund_amount"] = "$" + returns.loc[mask, "refund_amount"]
+
+# negative refunds (system bug)
+mask = returns.sample(frac=0.005, random_state=141).index
+returns.loc[mask, "refund_amount"] = "-" + returns.loc[mask, "refund_amount"].str.replace("$", "", regex=False)
+
+# reason casing inconsistency
+mask = returns.sample(frac=0.05, random_state=142).index
+returns.loc[mask, "reason"] = returns.loc[mask, "reason"].str.upper()
+
+# duplicate rows
+returns = pd.concat([
+    returns,
+    returns.sample(frac=0.02, random_state=143)
+])
+
+returns.to_csv(DIRTY_PATH / "returns.csv", index=False)
+
+# --- Promotions -------------------------------------------------------------
+
+promotions = pd.read_csv(CLEAN_PATH / "promotions.csv")
+mask = promotions.sample(frac=0.10, random_state=150).index
+promotions.loc[mask, "promo_name"] = promotions.loc[mask, "promo_name"].str.upper()
+promotions.to_csv(DIRTY_PATH / "promotions.csv", index=False)
+
+for clean_file in CLEAN_PATH.glob("*.csv"):
+    target = DIRTY_PATH / clean_file.name
+    if not target.exists():
+        pd.read_csv(clean_file).to_csv(target, index=False)
+
+print("Dirty-data injection complete")

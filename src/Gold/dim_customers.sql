@@ -1,13 +1,14 @@
-DROP TABLE IF EXISTS gold.dim_customers;
+DROP TABLE IF EXISTS gold.dim_customers CASCADE;
 
 CREATE TABLE gold.dim_customers AS
 SELECT
     customer_id,
     first_name,
     last_name,
-	email,
-	date_of_birth,
+    email,
+    date_of_birth,
     gender,
     city,
-    country
+    country,
+    signup_date
 FROM silver.customers;
