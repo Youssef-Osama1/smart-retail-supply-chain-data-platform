@@ -49,6 +49,7 @@ ALTER TABLE gold.fact_shipment_summary ADD CONSTRAINT fk_shipsum_delivdate FOREI
 ALTER TABLE gold.fact_returns ADD CONSTRAINT fk_ret_customer FOREIGN KEY (customer_id)     REFERENCES gold.dim_customers(customer_id);
 ALTER TABLE gold.fact_returns ADD CONSTRAINT fk_ret_product  FOREIGN KEY (product_id)      REFERENCES gold.dim_products(product_id);
 ALTER TABLE gold.fact_returns ADD CONSTRAINT fk_ret_date     FOREIGN KEY (return_date_key) REFERENCES gold.dim_date(date_key);
+ALTER TABLE gold.fact_returns ADD CONSTRAINT fk_ret_channel  FOREIGN KEY (channel)         REFERENCES gold.dim_channel(channel_id);
 
 -- fact_inventory (store/warehouse unified through gold.dim_location via location_key)
 ALTER TABLE gold.fact_inventory ADD CONSTRAINT fk_inv_product  FOREIGN KEY (product_id)        REFERENCES gold.dim_products(product_id);

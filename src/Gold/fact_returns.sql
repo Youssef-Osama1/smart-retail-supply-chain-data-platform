@@ -8,6 +8,7 @@ SELECT
     r.order_item_id,
     r.product_id,
     o.customer_id,
+    o.channel,
 
     TO_CHAR(r.return_date::date, 'YYYYMMDD')::int AS return_date_key,
 
