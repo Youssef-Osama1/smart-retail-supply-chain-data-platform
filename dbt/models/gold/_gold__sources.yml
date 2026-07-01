@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: silver
+    schema: silver
+    description: "Cleaned, conformed Silver layer loaded by the Python pipeline."
+    tables:
+      - name: orders
+      - name: order_items
+      - name: products
+      - name: customers
+      - name: stores
+      - name: warehouses
+      - name: promotions
+      - name: returns
+      - name: shipments
+      - name: shipment_items
+      - name: store_inventory
+      - name: warehouse_inventory

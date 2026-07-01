@@ -63,10 +63,10 @@ def retail_supply_chain_pipeline():
         from src.pipelines.load_silver_to_postgres import main
         main()
 
-    @task
-    def gold_build():
-        import runpy
-        runpy.run_path(str(PROJECT_ROOT / "src/pipelines/run_gold_pipeline.py"), run_name="__main__")
+    @task.bash
+    def gold_build() -> str:
+        dbt_dir = "/opt/airflow/dbt"
+        return f"dbt build --project-dir {dbt_dir} --profiles-dir {dbt_dir}"
 
     (
         generate()

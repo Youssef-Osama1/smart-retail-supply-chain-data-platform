@@ -13,7 +13,8 @@ The whole pipeline is orchestrated by **Apache Airflow** and runs with a single 
 
 - Designing and orchestrating a multi-stage data pipeline with Airflow.
 - A layered Medallion data architecture with clear responsibilities per layer.
-- Dimensional modeling: a Gold star schema (8 dimensions, 4 fact tables) built in raw SQL.
+- Dimensional modeling: a Gold star schema (8 dimensions, 5 fact tables) built with **dbt**,
+  with referential integrity enforced as dbt tests.
 - Data-quality enforcement as a hard gate that fails the pipeline on bad data.
 - A fully reproducible, containerized environment (one command to stand everything up).
 - A downstream BI layer (Power BI) and a forecasting model (XGBoost) consuming the warehouse.
@@ -25,7 +26,7 @@ The whole pipeline is orchestrated by **Apache Airflow** and runs with a single 
 | Orchestration | Apache Airflow 2.10.4 |
 | Processing | Python, pandas |
 | Storage / Warehouse | PostgreSQL 16 |
-| Modeling | SQL (star schema) |
+| Modeling | dbt (star schema, tests) |
 | Infrastructure | Docker, Docker Compose |
 | Machine Learning | XGBoost, scikit-learn |
 | BI | Power BI |
@@ -43,7 +44,7 @@ depends on the previous one, and the data-quality stage stops the run if any che
 | `silver_clean` | Cleans, standardizes, deduplicates, and type-casts each entity | `data/04_silver/` |
 | `dq_checks` | Validates PK uniqueness, FK integrity, value ranges, and business rules — **fails the run on violation** | — |
 | `load_silver_to_postgres` | Loads the Silver tables into the Postgres `silver` schema | `silver.*` |
-| `gold_build` | Builds the Gold star schema (dimensions, facts, constraints, indexes) | `gold.*` |
+| `gold_build` | Runs `dbt build` — materializes the Gold star schema (dimensions, facts, indexes) and runs all relationship/uniqueness tests | `gold.*` |
 
 ## The Medallion layers
 
@@ -55,7 +56,11 @@ deduplication, value mapping (e.g. `m`/`male` → `Male`), known typo fixes, and
 The Silver tables are then loaded into Postgres.
 
 **Gold** — business-ready dimensional model. A star schema optimized for analytics and BI,
-built in SQL directly from the Silver schema.
+built with **dbt** directly from the Silver schema. The Silver Postgres tables are declared as
+dbt *sources*; each dimension and fact is a dbt *model*, so dbt derives the build order from the
+`ref()`/`source()` dependency graph instead of a hand-maintained script. Primary keys and the
+foreign keys between facts and dimensions are enforced as dbt `unique`/`not_null`/`relationships`
+tests, and FK-column indexes are declared in each model's config. The dbt project lives in `dbt/`.
 
 ## The simulated business
 
@@ -93,10 +98,13 @@ Default scale: 25,000 customers, 100 products, 20 stores, up to 250,000 orders o
 | `fact_returns` | returned line | quantity returned, refund amount, reason |
 | `fact_inventory` | snapshot × product × location | quantity on hand, units sold, stockout flag |
 | `fact_shipments` | shipment line | quantity, shipping cost, delivery SLA |
+| `fact_shipment_summary` | shipment | shipping cost, delivery SLA (no double counting) |
 
-The data-quality gate enforces primary-key uniqueness, referential integrity across all facts
-and dimensions, non-negative numeric ranges, and business rules (for example, online orders
-must not carry a store id).
+Two gates protect quality. Upstream, the `dq_checks` stage enforces primary-key uniqueness,
+referential integrity, non-negative numeric ranges, and business rules (for example, online
+orders must not carry a store id) on the Silver data — and **fails the run** on violation. In the
+Gold layer, `dbt build` re-validates every primary key and every fact→dimension foreign key as
+dbt tests, so a modeling regression surfaces immediately.
 
 ## Analytics layer
 
@@ -138,7 +146,9 @@ python -m src.pipelines.run_bronze_pipeline      # generate -> inject -> bronze
 python -m src.pipelines.run_silver_pipeline      # clean -> silver
 python -m src.quality.dq_checks                  # data-quality gate
 python -m src.pipelines.load_silver_to_postgres  # silver -> Postgres
-python -m src.pipelines.run_gold_pipeline        # build gold star schema
+
+# build the gold star schema with dbt (point it at the host Postgres on 5433)
+DBT_HOST=localhost DBT_PORT=5433 dbt build --project-dir dbt --profiles-dir dbt
 ```
 
 ## Project layout
@@ -151,9 +161,9 @@ src/
     02_inject_dirty_data.py  # realistic data degradation
     03_bronze_load.py        # raw landing
   Silver/                    # one cleaner per entity
-  Gold/                      # star-schema SQL (dimensions, facts, constraints)
   quality/dq_checks.py       # PK / FK / range / rule data-quality gate
   pipelines/                 # stage runners (used by the DAG and locally)
+dbt/                         # dbt project: Gold star schema (models, sources, tests)
 dags/                        # Airflow DAG
 docker/                      # Postgres init scripts
 notebooks/                   # demand-forecasting model
