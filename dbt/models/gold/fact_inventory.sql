@@ -1,6 +1,11 @@
-DROP TABLE IF EXISTS gold.fact_inventory CASCADE;
-
-CREATE TABLE gold.fact_inventory AS
+{{ config(
+    materialized='table',
+    indexes=[
+        {'columns': ['product_id']},
+        {'columns': ['snapshot_date_key']},
+        {'columns': ['location_key']}
+    ]
+) }}
 
 SELECT
     TO_CHAR(snapshot_date::date, 'YYYYMMDD')::int AS snapshot_date_key,
@@ -11,7 +16,7 @@ SELECT
     quantity_on_hand,
     units_sold,
     stockout_flag
-FROM silver.store_inventory
+FROM {{ source('silver', 'store_inventory') }}
 
 UNION ALL
 
@@ -24,4 +29,4 @@ SELECT
     quantity_on_hand,
     units_sold,
     stockout_flag
-FROM silver.warehouse_inventory;
+FROM {{ source('silver', 'warehouse_inventory') }}

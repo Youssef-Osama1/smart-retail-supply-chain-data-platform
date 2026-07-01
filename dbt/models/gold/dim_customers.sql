@@ -1,6 +1,5 @@
-DROP TABLE IF EXISTS gold.dim_customers CASCADE;
+{{ config(materialized='table') }}
 
-CREATE TABLE gold.dim_customers AS
 SELECT
     customer_id,
     first_name,
@@ -11,4 +10,4 @@ SELECT
     city,
     country,
     signup_date
-FROM silver.customers;
+FROM {{ source('silver', 'customers') }}

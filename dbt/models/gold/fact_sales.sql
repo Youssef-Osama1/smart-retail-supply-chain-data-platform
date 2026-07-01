@@ -1,6 +1,15 @@
-DROP TABLE IF EXISTS gold.fact_sales CASCADE;
+{{ config(
+    materialized='table',
+    indexes=[
+        {'columns': ['customer_id']},
+        {'columns': ['product_id']},
+        {'columns': ['store_id']},
+        {'columns': ['date_key']},
+        {'columns': ['channel']},
+        {'columns': ['promo_id']}
+    ]
+) }}
 
-CREATE TABLE gold.fact_sales AS
 SELECT
     oi.order_item_id,
     o.order_id,
@@ -23,18 +32,17 @@ SELECT
     ROUND((oi.quantity * oi.price_paid)::numeric, 2)             AS net_amount,
     ROUND((oi.quantity * p.cost)::numeric, 2)                    AS cost_amount,
     ROUND((oi.quantity * (oi.price_paid - p.cost))::numeric, 2)  AS margin_amount
-FROM silver.order_items oi
-JOIN silver.orders o   ON oi.order_id = o.order_id
-JOIN silver.products p ON oi.product_id = p.product_id
--- Reconstruct the promotion link the generator threw away: a promo applies when the
--- order date falls inside its window AND its scope is 'all' or includes the product category.
--- Windows do not overlap, so at most one promo matches; LIMIT 1 keeps the grain safe.
+FROM {{ source('silver', 'order_items') }} oi
+JOIN {{ source('silver', 'orders') }} o   ON oi.order_id = o.order_id
+JOIN {{ source('silver', 'products') }} p ON oi.product_id = p.product_id
+
+
 LEFT JOIN LATERAL (
     SELECT pm.promo_id
-    FROM silver.promotions pm
+    FROM {{ source('silver', 'promotions') }} pm
     WHERE o.order_date::date BETWEEN pm.start_date::date AND pm.end_date::date
       AND (pm.scope = 'all' OR p.category = ANY(string_to_array(pm.scope, '|')))
     ORDER BY pm.promo_id
     LIMIT 1
 ) pr ON TRUE
-WHERE o.order_status = 'completed';
+WHERE o.order_status = 'completed'

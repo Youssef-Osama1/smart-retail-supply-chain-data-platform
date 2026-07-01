@@ -1,6 +1,5 @@
-DROP TABLE IF EXISTS gold.dim_products CASCADE;
+{{ config(materialized='table') }}
 
-CREATE TABLE gold.dim_products AS
 SELECT
     product_id,
     product_name,
@@ -11,4 +10,4 @@ SELECT
     unit_price,
     cost,
     launch_date
-FROM silver.products;
+FROM {{ source('silver', 'products') }}

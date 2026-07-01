@@ -1,7 +1,12 @@
-DROP TABLE IF EXISTS gold.fact_returns CASCADE;
+{{ config(
+    materialized='table',
+    indexes=[
+        {'columns': ['product_id']},
+        {'columns': ['return_date_key']}
+    ]
+) }}
 
 -- Grain: returned order line.
-CREATE TABLE gold.fact_returns AS
 SELECT
     r.return_id,
     r.order_id,
@@ -15,5 +20,5 @@ SELECT
     r.quantity_returned,
     r.refund_amount,
     r.reason
-FROM silver.returns r
-JOIN silver.orders o ON r.order_id = o.order_id;
+FROM {{ source('silver', 'returns') }} r
+JOIN {{ source('silver', 'orders') }} o ON r.order_id = o.order_id
