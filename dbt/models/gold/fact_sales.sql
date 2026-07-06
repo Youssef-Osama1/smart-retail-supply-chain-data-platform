@@ -6,7 +6,8 @@
         {'columns': ['store_id']},
         {'columns': ['date_key']},
         {'columns': ['channel']},
-        {'columns': ['promo_id']}
+        {'columns': ['promo_id']},
+        {'columns': ['source_system']}
     ]
 ) }}
 
@@ -19,6 +20,7 @@ SELECT
     oi.product_id,
     o.channel,
     pr.promo_id,                                               -- promotion in effect at order date (NULL if none)
+    o.source_system,                                           -- 'batch' (silver) or 'stream' (bronze_stream)
 
     TO_CHAR(o.order_date::date, 'YYYYMMDD')::int AS date_key,
 
@@ -32,8 +34,8 @@ SELECT
     ROUND((oi.quantity * oi.price_paid)::numeric, 2)             AS net_amount,
     ROUND((oi.quantity * p.cost)::numeric, 2)                    AS cost_amount,
     ROUND((oi.quantity * (oi.price_paid - p.cost))::numeric, 2)  AS margin_amount
-FROM {{ source('silver', 'order_items') }} oi
-JOIN {{ source('silver', 'orders') }} o   ON oi.order_id = o.order_id
+FROM {{ ref('stg_order_items') }} oi
+JOIN {{ ref('stg_orders') }} o   ON oi.order_id = o.order_id
 JOIN {{ source('silver', 'products') }} p ON oi.product_id = p.product_id
 
 

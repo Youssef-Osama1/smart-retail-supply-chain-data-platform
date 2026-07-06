@@ -11,8 +11,15 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+
+on-run-start:
+  - "{{ ensure_stream_tables() }}"
+
 models:
   retail_dw:
     gold:
       +materialized: table
       +schema: gold
+    staging:
+      +materialized: view
+      +schema: staging

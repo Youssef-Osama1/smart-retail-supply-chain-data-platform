@@ -17,3 +17,10 @@ sources:
       - name: shipment_items
       - name: store_inventory
       - name: warehouse_inventory
+
+  - name: bronze_stream
+    schema: bronze_stream
+    description: "Streaming-Bronze landing zone written by the Kafka order consumer."
+    tables:
+      - name: orders_raw
+      - name: order_items_raw

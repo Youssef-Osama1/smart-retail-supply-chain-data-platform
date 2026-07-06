@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: stg_orders
+    description: "Batch (silver) + streamed (bronze_stream) orders, unioned; source_system flags origin."
+    columns:
+      - name: source_system
+        tests:
+          - accepted_values:
+              values: ['batch', 'stream']
+
+  - name: stg_order_items
+    description: "Batch (silver) + streamed (bronze_stream) order lines, unioned."
+    columns:
+      - name: source_system
+        tests:
+          - accepted_values:
+              values: ['batch', 'stream']
