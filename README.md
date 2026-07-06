@@ -25,6 +25,7 @@ The whole pipeline is orchestrated by **Apache Airflow** and runs with a single 
 |------|-------|
 | Orchestration | Apache Airflow 2.10.4 |
 | Processing | Python, pandas |
+| Streaming | Apache Kafka (KRaft) |
 | Storage / Warehouse | PostgreSQL 16 |
 | Modeling | dbt (star schema, tests) |
 | Infrastructure | Docker, Docker Compose |
@@ -117,6 +118,46 @@ XGBoost model to forecast monthly quantity sold per product category. It pulls a
 from the Gold layer and engineers lag features, rolling averages, and cyclical month encodings,
 with a time-based train/test split.
 
+## Real-time / streaming layer (Kafka)
+
+Alongside the batch pipeline, the platform has a **streaming-ingestion path** that simulates
+live order traffic — the batch pipeline loads history; the stream keeps flowing in real time.
+
+```
+order-producer ──▶ Kafka topic `orders` ──▶ order-consumer ──▶ bronze_stream.* (Postgres)
+                        │
+                   Kafka UI (:8081)
+```
+
+- **Producer** (`src/streaming/order_producer.py`) — loads reference data (products, customers,
+  stores) from `silver.*`, then continuously emits realistic order events (reusing the same
+  demand/basket/promotion logic as the batch generator via `src/config.py`) to the `orders` topic.
+  Streamed order ids continue past the batch ids so the two never collide.
+- **Consumer** (`src/streaming/order_consumer.py`) — reads the topic and lands each event into a
+  separate **streaming Bronze** (`bronze_stream.orders_raw` + `bronze_stream.order_items_raw`).
+  Delivery is **at-least-once**: Kafka offsets are committed only after the Postgres write
+  succeeds, and every row keeps its `kafka_partition`, `kafka_offset`, and `ingested_at`.
+- **Kafka** runs as a single-node **KRaft** broker (no Zookeeper); **Kafka UI** at
+  http://localhost:8081 lets you browse the topic and messages live.
+
+**Streaming into Gold.** The streamed orders are folded into the warehouse via dbt: staging views
+(`stg_orders`, `stg_order_items`) `UNION` the batch (`silver`) and streamed (`bronze_stream`) orders,
+and `fact_sales` builds on top of them with a `source_system` column (`batch` / `stream`) so Power BI
+can slice historical vs live. Because dbt is batch, streamed orders appear in Gold **after the next
+`dbt build`** (re-run the DAG), and Power BI (Import) then needs a Refresh — a micro-batch model, not
+instant. A dbt on-run-start hook keeps the Gold build independent of whether the stream has ever run.
+
+The streaming services are long-running (not Airflow tasks). Start them and watch the stream:
+
+```bash
+docker compose up -d --build kafka kafka-ui order-producer order-consumer
+# rows should keep increasing:
+docker compose exec postgres psql -U airflow -d retail -c "select count(*) from bronze_stream.orders_raw;"
+```
+
+> The producer needs `silver.*` populated first (run the batch DAG once). Until then it waits and
+> logs that reference data is empty.
+
 ## Running it
 
 ### Option A — Docker (full platform)
@@ -161,11 +202,12 @@ src/
     02_inject_dirty_data.py  # realistic data degradation
     03_bronze_load.py        # raw landing
   Silver/                    # one cleaner per entity
+  streaming/                 # Kafka producer + consumer (real-time order stream)
   quality/dq_checks.py       # PK / FK / range / rule data-quality gate
   pipelines/                 # stage runners (used by the DAG and locally)
 dbt/                         # dbt project: Gold star schema (models, sources, tests)
 dags/                        # Airflow DAG
-docker/                      # Postgres init scripts
+docker/                      # Postgres init scripts + streaming Dockerfile
 notebooks/                   # demand-forecasting model
 Dockerfile, docker-compose.yml
 ```
