@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZARA Demand Forecasting</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>📊 ZARA Demand Forecasting System</h1>
+                <p>XGBoost monthly demand forecast, served from the Gold warehouse</p>
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <!-- Model Status -->
+            <div class="card status-card">
+                <div class="status-indicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="modelStatus">Loading model...</span>
+                </div>
+                <div class="model-info" id="modelInfo">
+                    <span class="info-label">Features:</span>
+                    <span class="info-value" id="featureCount">-</span>
+                    <span class="info-label">Model:</span>
+                    <span class="info-value" id="modelType">-</span>
+                </div>
+            </div>
+
+            <!-- Forecast Form -->
+            <div class="card input-card">
+                <h2>🔮 Forecast Demand</h2>
+                <p class="form-hint">Pick a category and how many months ahead. Lags, rolling averages
+                    and promo signals are read automatically from the Gold layer.</p>
+                <form id="forecastForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="category">Category</label>
+                            <select id="category" required>
+                                {% for cat in categories %}
+                                <option value="{{ cat }}">{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="horizon">Months ahead</label>
+                            <input type="number" id="horizon" value="6" min="1" max="12" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary">Forecast Demand</button>
+                </form>
+            </div>
+
+            <!-- Results Section -->
+            <div class="card results-card" id="resultsCard" style="display: none;">
+                <h2>📈 Forecast — <span id="resultCategory">-</span></h2>
+
+                <h3 class="section-label">Recent actuals (Gold)</h3>
+                <div id="actualsTableContainer"></div>
+
+                <h3 class="section-label">Forecast (next months)</h3>
+                <div id="forecastTableContainer"></div>
+
+                <p class="footnote">Test-set accuracy: MAPE 8.9% on held-out months.</p>
+
+                <div class="action-buttons">
+                    <button onclick="clearResults()" class="btn-secondary">Clear</button>
+                    <button onclick="exportResults()" class="btn-secondary">Export JSON</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastResult = null;
+
+        checkModelStatus();
+        setInterval(checkModelStatus, 30000);
+
+        async function checkModelStatus() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                const statusDot = document.getElementById('statusDot');
+                const modelStatus = document.getElementById('modelStatus');
+
+                if (data.model_loaded && data.history_loaded) {
+                    statusDot.className = 'status-dot healthy';
+                    modelStatus.textContent = 'Model & warehouse ready';
+                } else {
+                    statusDot.className = 'status-dot unhealthy';
+                    modelStatus.textContent = 'Not ready';
+                }
+
+                const infoResponse = await fetch('/model_info');
+                const info = await infoResponse.json();
+                if (info.model_loaded) {
+                    document.getElementById('featureCount').textContent = info.features_count;
+                    document.getElementById('modelType').textContent = info.model_type;
+                }
+            } catch (error) {
+                console.error('Status check error:', error);
+            }
+        }
+
+        document.getElementById('forecastForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            try {
+                const payload = {
+                    category: document.getElementById('category').value,
+                    horizon: parseInt(document.getElementById('horizon').value || 6)
+                };
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    lastResult = result;
+                    displayResults(result);
+                } else {
+                    alert('Error: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error generating forecast: ' + error.message);
+            }
+        });
+
+        function displayResults(result) {
+            const card = document.getElementById('resultsCard');
+            card.style.display = 'block';
+            document.getElementById('resultCategory').textContent = result.category;
+
+            let actuals = `<table class="forecast-table"><thead><tr>
+                <th>Month</th><th>Actual (units)</th></tr></thead><tbody>`;
+            result.recent_actuals.forEach(a => {
+                actuals += `<tr><td>${a.date}</td><td>${a.actual.toLocaleString()}</td></tr>`;
+            });
+            actuals += `</tbody></table>`;
+            document.getElementById('actualsTableContainer').innerHTML = actuals;
+
+            let fc = `<table class="forecast-table"><thead><tr>
+                <th>Month</th><th>Forecast (units)</th></tr></thead><tbody>`;
+            result.forecasts.forEach(f => {
+                fc += `<tr><td>${f.date}</td><td>${Math.round(f.forecast).toLocaleString()}</td></tr>`;
+            });
+            fc += `</tbody></table>`;
+            document.getElementById('forecastTableContainer').innerHTML = fc;
+
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function clearResults() {
+            document.getElementById('resultsCard').style.display = 'none';
+        }
+
+        function exportResults() {
+            if (!lastResult) return;
+            const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `forecast_${lastResult.category}_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
